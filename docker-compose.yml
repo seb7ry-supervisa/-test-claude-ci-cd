@@ -1,0 +1,10 @@
+services:
+  simuladores-api:
+    build: .
+    image: simuladores-api:local
+    container_name: simuladores-api
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+    restart: unless-stopped

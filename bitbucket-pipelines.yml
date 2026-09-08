@@ -1,0 +1,58 @@
+image: node:20-alpine
+
+definitions:
+  steps:
+    - step: &install-and-check
+        name: Instalar dependencias y verificar sintaxis
+        caches:
+          - node
+        script:
+          - npm install
+          - node -e "require('./src/app')" # falla el build si algún routes.js tiene un error de sintaxis
+
+    - step: &build-and-push
+        name: Build y push de imagen Docker
+        services:
+          - docker
+        script:
+          - export IMAGE_TAG=${BITBUCKET_BRANCH}
+          - docker build -t $DOCKER_REGISTRY/simuladores-api:$IMAGE_TAG .
+          - echo "$DOCKER_PASSWORD" | docker login $DOCKER_REGISTRY -u "$DOCKER_USERNAME" --password-stdin
+          - docker push $DOCKER_REGISTRY/simuladores-api:$IMAGE_TAG
+
+    - step: &load-and-schema-tests
+        name: Pruebas de carga (k6) y validación de estructura (ajv)
+        image: grafana/k6:latest
+        script:
+          # La imagen base es la de k6 (Alpine); le sumamos Node para levantar el mock y correr el validador.
+          - apk add --no-cache nodejs npm curl bash
+          - npm install
+          - node server.js &
+          - APP_PID=$!
+          - for i in $(seq 1 30); do curl -sf -X POST -H "Content-Type: application/json" http://localhost:4000/transkal/srvipservices/SPRBOperacionControlAccesos >/dev/null 2>&1 && break; sleep 1; done
+          - npm run test:schema
+          - k6 run tests/loadtest.k6.js
+          - kill $APP_PID
+
+pipelines:
+  branches:
+    '**':
+      - step: *install-and-check
+
+    develop:
+      - step: *install-and-check
+      - step:
+          <<: *build-and-push
+          name: Publicar imagen (dev)
+
+    master:
+      - step: *install-and-check
+      - step:
+          <<: *build-and-push
+          name: Publicar imagen (stable)
+          trigger: manual
+
+  pull-requests:
+    '**':
+      - step: *install-and-check
+      - step: *load-and-schema-tests
