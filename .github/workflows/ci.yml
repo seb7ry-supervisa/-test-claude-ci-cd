@@ -17,6 +17,19 @@ jobs:
           cache: npm
       - run: npm install
       - run: node -e "require('./src/app')" # falla el build si algún routes.js tiene un error de sintaxis
+      - run: npm run test:documented # falla si algún endpoint no tiene entrada en tests/endpoints/<cliente>.mjs
+
+  build-check-prod:
+    name: Verificar build con dependencias de producción
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --omit=dev
+      - run: node -e "require('./src/app')" # atrapa el caso de usar sin querer un paquete que solo está en devDependencies
 
   load-and-schema-tests:
     name: Pruebas de carga (k6) y validación de estructura (ajv)
