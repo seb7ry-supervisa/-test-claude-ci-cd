@@ -88,6 +88,8 @@ Al agregar un cliente nuevo:
 1. Crear `tests/endpoints/<nombreCliente>.mjs` con un objeto por escenario relevante (al menos el happy path y un caso de error).
 2. Agregar el `import` de ese archivo en `tests/loadtest.k6.js`.
 
+**Esto no es opcional ni depende de que alguien se acuerde de hacerlo**: `npm run test:documented` (`tests/check-documented-routes.mjs`) recorre `src/app.js` y cada `routes.js`, y falla si un endpoint no tiene entrada en `tests/endpoints/<cliente>.mjs`. Corre automáticamente en cada PR (ver `bitbucket-pipelines.yml`) — un endpoint sin esa entrada bloquea el PR, no hace falta que un revisor lo note a mano.
+
 ## 8. Checklist antes de abrir el PR
 
 - [ ] El cliente vive en su propia carpeta bajo `src/clients/`.
@@ -97,7 +99,7 @@ Al agregar un cliente nuevo:
 - [ ] Se probó localmente con `npm run dev` o `docker compose up --build` contra cada escenario simulado.
 - [ ] Se agregó la línea de registro en `src/app.js`.
 - [ ] Se agregó `tests/endpoints/<nombreCliente>.mjs` y su import en `tests/loadtest.k6.js`.
-- [ ] `npm run test:schema` y `k6 run tests/loadtest.k6.js` pasan en local.
+- [ ] `npm run test:documented`, `npm run test:schema` y `k6 run tests/loadtest.k6.js` pasan en local (el pipeline los vuelve a correr en el PR, pero conviene no descubrir un fallo ahí).
 - [ ] El PR va primero a `develop`; a `master` solo después de aprobado.
 
 ## 9. Flujo de ramas

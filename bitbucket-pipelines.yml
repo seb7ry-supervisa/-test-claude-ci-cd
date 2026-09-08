@@ -9,6 +9,13 @@ definitions:
         script:
           - npm install
           - node -e "require('./src/app')" # falla el build si algún routes.js tiene un error de sintaxis
+          - npm run test:documented # falla si algún endpoint no tiene entrada en tests/endpoints/<cliente>.mjs
+
+    - step: &build-check-prod
+        name: Verificar build con dependencias de producción
+        script:
+          - npm ci --omit=dev
+          - node -e "require('./src/app')" # atrapa el caso de usar sin querer un paquete que solo está en devDependencies
 
     - step: &build-and-push
         name: Build y push de imagen Docker
@@ -55,4 +62,5 @@ pipelines:
   pull-requests:
     '**':
       - step: *install-and-check
+      - step: *build-check-prod
       - step: *load-and-schema-tests
