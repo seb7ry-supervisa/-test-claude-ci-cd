@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  install-and-check:
+    name: Instalar dependencias y verificar sintaxis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm install
+      - run: node -e "require('./src/app')" # falla el build si algún routes.js tiene un error de sintaxis
+
+  load-and-schema-tests:
+    name: Pruebas de carga (k6) y validación de estructura (ajv)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm install
+      - name: Levantar el mock en background
+        run: |
+          node server.js &
+          echo $! > app.pid
+          for i in $(seq 1 30); do curl -sf -X POST -H "Content-Type: application/json" http://localhost:4000/transkal/srvipservices/SPRBOperacionControlAccesos >/dev/null 2>&1 && break; sleep 1; done
+      - name: Validar estructura de respuesta (ajv)
+        run: npm run test:schema
+      - name: Prueba de carga (k6)
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: tests/loadtest.k6.js
+      - name: Apagar el mock
+        if: always()
+        run: kill $(cat app.pid) || true
+
+  publish-image:
+    name: Publicar imagen Docker
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
+    needs: install-and-check
+    runs-on: ubuntu-latest
+    # Pendiente: configurar los secrets DOCKER_REGISTRY, DOCKER_USERNAME, DOCKER_PASSWORD
+    # en Settings -> Secrets and variables -> Actions antes de que este job funcione.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build y push de imagen Docker
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          IMAGE_TAG=${GITHUB_REF##*/}
+          docker build -t $DOCKER_REGISTRY/simuladores-api:$IMAGE_TAG .
+          echo "$DOCKER_PASSWORD" | docker login $DOCKER_REGISTRY -u "$DOCKER_USERNAME" --password-stdin
+          docker push $DOCKER_REGISTRY/simuladores-api:$IMAGE_TAG
