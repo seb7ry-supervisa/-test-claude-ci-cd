@@ -42,6 +42,10 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm install
+      - name: Instalar k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v1.3.0/k6-v1.3.0-linux-amd64.tar.gz | tar xz --strip-components 1
+          sudo mv k6 /usr/local/bin/k6
       - name: Levantar el mock en background
         run: |
           node server.js &
@@ -50,9 +54,7 @@ jobs:
       - name: Validar estructura de respuesta (ajv)
         run: npm run test:schema
       - name: Prueba de carga (k6)
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: tests/loadtest.k6.js
+        run: k6 run tests/loadtest.k6.js
       - name: Apagar el mock
         if: always()
         run: kill $(cat app.pid) || true
